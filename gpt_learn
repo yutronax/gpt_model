@@ -1,0 +1,68 @@
+import openai
+import os
+openai.api_key="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"
+import pandas as pd
+import google.generativeai as genai
+gemini_api_key = "AIzaSyDKucjYQsRKXvQumAZWSQrNEEeR4POwir8"
+genai.configure(api_key=gemini_api_key)
+model = genai.GenerativeModel("gemini-1.5-flash")
+
+class gpt_model:
+    def __init__(self):  
+       
+       # Dosya yolunu buraya ekleyin
+
+    # Dosya içeriğini oku
+      
+
+       self.data=pd.DataFrame(columns=["role","content"])
+    #eğitim kısmı
+       
+       self.data["content"]=[
+        f"Bu, sohbette insancıl bir tavır ve uslüpla konuşacaksın.",
+        f"eğer kullanıcı sohbete dosya gönderirse ilk önce max 5 cümleden oluşacak şekilde özetleyeceksin sonrada soruları hazırlayım mı? diyeceksin",
+        f"eğer kullanıcı soruları hazırlayım mı sorusuna  olumlu bir cevap verirse gönderilen dosyanın içeriğinden oluşan 30 tane soru hazırlayacaksın sorular alt alta ve bir cümleyi geçmicek şekilde net ve öz bir şekilde hazılayacaksın . hazırladıktan sonrada başka soru ekleyim mi? diceksin  ",
+        f"eğer kullanıcı başka spru ekleyim mi sorusuna olumlu bir cevap verirse bir soru daha yazacaksın eğer olumsuz bir cevap verirse hazırlanan soruların cebaplarını yazıcaksın",
+        f"sorular system hafızasına sürekli kontrol et ve ona göre cevap ver"
+        ]
+       self.data["role"]=["system" for i in range(len(self.data["content"]))]
+    
+        
+    def soru_cevap(self,soru):
+     
+     print(self.data.to_dict("records"))
+     response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",  # ya da başka bir model kullanabilirsiniz
+        
+        messages=
+        
+            self.data.to_dict("records")+[ {"role": "user", "content": f"{soru}"}]
+        
+        
+    )
+     
+     self.data.loc[len(self.data)]=["system",f"kullanıcının istemi {soru}"]
+     
+     cevap=response['choices'][0]['message']['content']
+     
+     self.data.loc[len(self.data)]=["system",f"botun cevabi {cevap}"]
+   
+
+     
+     print(response['choices'][0]['message']['content'])
+
+    # Cevabı yazdırıyoruz
+gpt=gpt_model()
+while True:
+    soru=input("Botun sözlü soru girin:")
+   
+
+    if soru=="q":
+        break
+  
+    gpt.soru_cevap(soru)
+    
+   
+    print("-------------------------")
+   
+
