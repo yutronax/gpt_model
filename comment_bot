@@ -1,0 +1,139 @@
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+import undetected_chromedriver as uc
+import google.generativeai as genai
+import time
+import json
+
+class commentbot:
+    def __init__(self, gemini_api_key, chrome_user_data):
+        options = webdriver.ChromeOptions()
+        options.add_argument(f"--user-data-dir={chrome_user_data}")
+        self.driver = uc.Chrome(options=options)
+        self.driver.get("https://www.google.com/search?q=cebrail+usta+k%C3%B6fte+ve+d%C3%B6ner+salonu+elaz%C4%B1%C4%9F+merkez+yorumlar%C4%B1")
+        time.sleep(1)
+        
+        WebDriverWait(self.driver, 10).until(
+            EC.presence_of_element_located((By.XPATH, '//ul[@jsname="GWlgVd"]/li[2]'))
+        ).click()
+
+        time.sleep(4)
+        
+        iframe = self.driver.find_element(By.XPATH, '//iframe[@sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-storage-access-by-user-activation"]')
+        self.driver.switch_to.frame(iframe)
+        time.sleep(2)
+        # Api key ve chrome user data ile yapılandırma
+        genai.configure(api_key=gemini_api_key)
+        self.model = genai.GenerativeModel("gemini-1.5-flash")
+        self.prompt ="""
+
+
+
+**Restaurant Name:**
+
+The name of the restaurant should always be referred to as "Cebrail Usta Döner" correctly in the responses.  
+Use the restaurant’s name consistently to protect its brand image.
+
+**Positive Comments:**
+
+- **Express Gratitude:** Always thank users for their positive feedback in a warm and heartfelt way.
+- **Keep It Short and Clear:** Responses should be brief, not exceeding two sentences, but still sincere and appreciative.
+- **Encourage Future Visits:** Encourage users to visit again in a friendly and welcoming manner, showing eagerness to serve them again.
+
+**Negative Comments:**
+
+- **Show Empathy:** Respond with understanding and kindness, showing that you genuinely care about the user's experience.
+- **Offer Solutions:** Suggest ways to resolve the issue and let the user know that the restaurant will make efforts to improve.
+- **Be Open to Improvement:** Highlight that customer feedback is important and that the restaurant values every suggestion to enhance its service.
+- **Keep It Short and Polite:** Responses should be concise, polite, and considerate. Apologies should be made when necessary, with a warm and friendly tone.
+
+**Language Use:**
+
+- **Polite and Respectful:** Always use a tone that is respectful, kind, and approachable.
+- **Friendly and Human-like Tone:** Responses should sound genuine, not robotic. Keep a personal touch and warmth in every interaction.
+- **Always Respond in Turkish:** All responses should be in Turkish, without exceptions.
+
+**Consistency:**
+
+- **Consistent Responses:** Provide similar responses to similar negative comments, maintaining a consistent approach to feedback.
+- **Tailor Responses to the Comment:** Each response should be tailored to the specific content of the comment, avoiding generic replies. The response should feel personal and specific to the user.
+
+**Irrelevant or Inappropriate Comments:**
+
+- **Understanding and Courteous:** For comments with random words, irrelevant topics, or political content, respond politely, expressing that you didn’t fully understand their feedback, and thank them for their attention. Responses should always be human-like, soft, and sincere, as if talking to a person.
+- **Keep It Short and Neutral:** Responses should remain brief, neutral, and respectful, avoiding political or controversial topics.
+- **Avoid Responding to Random Letters or Empty Comments:** Do not respond to random letters or empty content. In such cases, simply reply with "q."
+
+**Comment Reposting Situation:**
+
+- **Fully Change the Response:** If a user reposts a comment that was not liked by the restaurant owner, the response should be completely rewritten from the beginning. The new response should offer a fresh perspective, showing that the restaurant genuinely cares about feedback, no matter how many times it is shared.
+- **Alternative and Thoughtful Response:** The response should sound human, warm, and understanding, ensuring that even reposted comments are addressed with care and sincerity.
+
+**Restaurant Information:**  
+Cebrail Usta Döner, located in the Çaydaçıra neighborhood of Elazığ, Turkey, is a döner restaurant mainly serving students. It is situated right next to the Ahmet Kabaklı male student dormitory and offers affordable chicken döner. The restaurant's staff is friendly, and it provides internet and tea services for students to enjoy while they dine.
+"""
+        
+        
+
+    def generate_response(self, feedback, yorum):
+        
+        
+      
+        if feedback == "k":
+            self.response = self.model.generate_content([self.prompt, f"\nbotun önceki cevabı beğenilmedi yeni cevap üret {yorum} "])
+        else:
+            self.response = self.model.generate_content([self.prompt, f"kullanıcının yorumu :{yorum}\n"])
+        
+        return f"kullanıcının yorumu :{yorum}\n botun cevabı :{self.response.text}"
+
+    def start_processing(self):
+        
+
+        button = WebDriverWait(self.driver, 10).until(
+            EC.element_to_be_clickable((By.ID, 'tab-reviews-unreplied'))
+        )
+        button.click()
+        time.sleep(2)
+
+        comments =self.driver.find_elements(By.CSS_SELECTOR, ".VaHEVc")
+        
+        for i, comment in enumerate(comments):
+            try:
+                user_comment = comment.find_element(By.CSS_SELECTOR, ".gyKkFe.JhRJje").text.replace("Yorumun tamamını göster", "").replace("Yanıtla", "").replace("gün önce", "").replace("star", "")
+                print(self.generate_response("", user_comment))
+
+                while True:
+                    user_feedback = input("\nBeğendiniz mi? (q: çıkış, k: beğenmedim, g: gönder, diğer: beğendim)\n")
+                    if user_feedback == "q":
+                        
+                        self.driver.quit()
+                        return
+                    elif user_feedback == "k":
+                        print(self.generate_response(user_feedback, user_comment))
+                    elif user_feedback == "g":
+                        comment.find_element("xpath", '//button[@class="VfPpkd-LgbsSe VfPpkd-LgbsSe-OWXEXe-Bz112c-M1Soyc VfPpkd-LgbsSe-OWXEXe-dgl2Hf ksBjEc lKxP2d LQeN7 FwaX8"]').click()  # Button click logic
+                        time.sleep(1)
+                        textarea = WebDriverWait(self.driver, 10).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "textarea.VfPpkd-fmcmS-wGMbrd"))
+                ).send_keys(self.response.text)
+                        time.sleep(1)
+                        comment.find_element("xpath", '//button[@class="VfPpkd-LgbsSe VfPpkd-LgbsSe-OWXEXe-k8QpJ VfPpkd-LgbsSe-OWXEXe-dgl2Hf nCP5yc AjY5Oe DuMIQc LQeN7 FwaX8"]').click()
+                        time.sleep(1)
+                        break
+
+            except Exception as e:
+                print(f"Hata: {e}")
+
+            # Scroll yaparak yeni yorumları yükle
+        self.driver.execute_script("window.scrollBy(0, 200);")
+        time.sleep(2)
+
+
+if __name__ == "__main__":
+    gemini_api_key = "you_api_key"
+    chrome_user_data = "you_user_data"
+    bot = commentbot(gemini_api_key, chrome_user_data)
+    bot.start_processing()
