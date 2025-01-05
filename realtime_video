@@ -1,4 +1,76 @@
-"""1. Amaç: Modelin amacı, kendisine gönderilen videoları analiz etmek ve yalnızca bu videolar hakkında cevaplar vermek, alakasız bir istem geldiğinde ise "Bu video hakkında konuşabilirim." şeklinde cevap vermektir. Model, tüm video içeriklerini doğru bir şekilde analiz etmek için eğitilecektir. (Her zaman Türkçe cevap verecek şekilde eğitilecektir.)
+import cv2
+import threading
+import time
+import google.generativeai as genai
+from gtts import gTTS
+import pygame
+import speech_recognition as sr
+
+class RealtimeVideo:
+    def __init__(self):
+        self.recording = False
+        self.processing = False
+        self.islem = False
+        self.allow_prompt = True
+        self.gemini_api_key = "AIzaSyDKucjYQsRKXvQumAZWSQrNEEeR4POwir8"
+        genai.configure(api_key=self.gemini_api_key)  # Gemini API anahtarı ile konfigürasyon
+
+    def video(self):
+        cam = cv2.VideoCapture(0)  # Kamera açılır
+        while True:
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # Video formatı belirlenir
+            out = cv2.VideoWriter('output.mp4', fourcc, 20.0, (640, 480))  # Video dosyasına yazılacak ayar
+
+            while True:
+                ret, frame = cam.read()  # Kameradan görüntü alınır
+                if not ret:
+                    break  # Eğer görüntü alınamazsa döngüden çıkılır
+                cv2.imshow('Video', frame)  # Görüntü ekranda gösterilir
+
+                key = cv2.waitKey(1)  # Kullanıcı tuşa basarsa işlem yapılır
+                
+                if key == ord('q'):  # 'q' tuşuna basıldığında program sonlanır
+                    cam.release()
+                    cv2.destroyAllWindows()
+                    exit(0)
+                elif key == ord('s') and self.allow_prompt:  # 's' tuşuna basıldığında sesli komut alınır
+                    prompt_thread = threading.Thread(target=self.get_prompt)
+                    prompt_thread.start()
+                
+                if self.processing:
+                    out.write(frame)  # Video kaydedilmeye başlanır
+                    
+                    if time.time() - self.start_time > 10:  # 10 saniye sonra video kaydı durdurulur
+                        out.release()
+                        self.allow_prompt = False
+                        self.processing = False
+                        ai_thread = threading.Thread(target=self.gemini)
+                        ai_thread.start()
+                        if self.islem:
+                            self.islem = False
+                            break
+                        
+
+    def get_prompt(self):
+        basla = time.time()
+        recognizer = sr.Recognizer()  # Sesli komut almak için tanıyıcı başlatılır
+        with sr.Microphone() as source:
+            print("Please speak your prompt:")  # Kullanıcıdan komut beklenir
+            audio = recognizer.listen(source)  # Ses kaydedilir
+        
+        try:
+            self.prompt1 = recognizer.recognize_google(audio, language="tr-TR")  # Ses metne dönüştürülür
+            print(f"Recognized Prompt: {self.prompt1}")
+            self.processing = True
+            self.start = time.time()
+        except sr.UnknownValueError:
+            print("Sorry, could not understand the audio.")
+        except sr.RequestError as e:
+            print(f"Could not request results; {e}")
+        self.start_time = time.time()
+
+    def gemini(self):
+        prompt_text = """1. Amaç: Modelin amacı, kendisine gönderilen videoları analiz etmek ve yalnızca bu videolar hakkında cevaplar vermek, alakasız bir istem geldiğinde ise "Bu video hakkında konuşabilirim." şeklinde cevap vermektir. Model, tüm video içeriklerini doğru bir şekilde analiz etmek için eğitilecektir. (Her zaman Türkçe cevap verecek şekilde eğitilecektir.)
 2. Video İçeriği Analiz Yöntemi: Model, video içeriğini analiz ederken şu öğeleri dikkate alacaktır:
 Görsel Analiz: Videodaki nesneler, insanlar, çevre, yerler, renkler, hareketler ve önemli görsel detaylar.
 Ses İçeriği: Videodaki konuşmalar, açıklamalar, diyaloglar, ses efektleri ve müzik.
@@ -58,3 +130,43 @@ Doğruluk: Video içeriğine uygun doğru cevaplar verme oranı.
 Hız: Cevapları hızlı ve verimli bir şekilde sağlama.
 Yanıt Tutarlılığı: Alakasız istemlere doğru şekilde yanıt verme oranı.
 Anlama ve İfade: Video içeriğini anlama ve açıklamaların netliği.""" 
+        model = genai.GenerativeModel("gemini-1.5-pro")
+
+        video_file_name = 'output.mp4'
+        print("Uploading file...")
+        video_file = genai.upload_file(path=video_file_name)  # Video dosyası yüklenir
+        print(f"Completed upload: {video_file.uri}")
+
+        while video_file.state.name != "ACTIVE":
+            print('Waiting for the file to become ACTIVE...')
+            time.sleep(10)
+            video_file = genai.get_file(video_file.name)  # Video işlenmeye başlanana kadar beklenir
+            if video_file.state.name == "FAILED":
+                print("File processing failed.")
+                return
+
+        response = model.generate_content([prompt_text, video_file, self.prompt1], request_options={"timeout": 600})  # AI modeli içerik üretir
+        print(response.text)
+
+        self.allow_prompt = True
+        self.response_text = response.text
+        self.islem = True
+        voice_thread = threading.Thread(target=self.speak_response)  # Yanıt sesli hale getirilir
+        voice_thread.start()
+
+    def speak_response(self):
+        metin = self.response_text
+        tts = gTTS(text=metin, lang='tr')  # Text-to-speech ile metin sesli hale getirilir
+        tts.save("cevap.mp3")  # Ses dosyası kaydedilir
+        pygame.mixer.init()
+        pygame.mixer.music.load("cevap.mp3")  # Ses dosyası yüklenir
+        pygame.mixer.music.play()  # Ses çalınır
+        while pygame.mixer.music.get_busy():  
+            pygame.time.Clock().tick(10)  # Sesin bitmesini bekler
+
+
+if __name__ == '__main__':
+    realtime_video = RealtimeVideo()  # RealtimeVideo sınıfı başlatılır
+    video_thread = threading.Thread(target=realtime_video.video)  # Video kaydı için yeni bir thread başlatılır
+    video_thread.start()
+    video_thread.join()  # Thread'in tamamlanması beklenir
